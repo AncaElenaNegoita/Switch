@@ -1,0 +1,65 @@
+Exercitii facute: 1, 2, 3
+Copyright, Negoita Anca-Elena, 331 CA, 2023-2024
+
+Switch
+------------------------------------------------------------------------------------------
+In this project, the logic of a switch is implemented using Python in order to have the
+STP identify the correct path without cycles, and of the least expensive cost(the path
+from one switch to another), and send packages forward from one host to another, of the
+same VLAN.
+
+1. Linking
+The switch knows where the packet came from and what data it contains. It insert in the CAM
+table the MAC source and the port if no information existed before about that source.
+There are 2 situations:
+- the path is known to the destination, in which the switch sends directly the packet to 
+the known port that is found in its CAM table.
+- the path is not known, in which the switch sends the packet to all ports without the
+one the packet came from (floods the system) in order to find the destination. All connected
+switches will upgrade their CAM table with the MAC of the source, associated with the port the
+packet came from
+
+2. VLAN
+Each host has a different local address, represented by its VLAN. 2 hosts can communicate if
+they both are in the same local address. If not, the packet is dropped, and the sender won't
+receive information about the delivery. In order to verify the VLAN, a tag is inserted in the
+header(packet) that can pe identified by the prefix 0x8100, that stores the VLAN of the sender.
+When the packet is received from a host, the switch inserts the tag after the source MAC and
+forwards the packet. In the system, the chain between switches are trunk, so they can receive 
+packages from each VLAN. Knowing that, the tag can remain until the end. When sending the packet to
+a host, it is verified if it has the same VLAN as the sender, and if positive, the tag is removed
+and the original packet is sent. The linking process wprks the same as before.
+
+3. STP
+In the network system, the switches can create cycles or have a lot more connections that, in the 
+end, become useless. If a cycle is found, the way the switch received the packet is blocked. Some 
+ports need to be blocked in order for packets not to go through that connection and have an
+unique path from one another. 
+A struct is used to simplify the process:
+class BPDUConfig:
+- root_bridge_id - the priority of the route bridge from the network system
+- root_path_cost - the cost from the current switch to the root bridge
+- bridge_id - the current switch's priority
+
+The packet sent from a switch is of type BPDU, and is made of the destination MAC, which is the
+multicast address 01:80:C2:00:00:00, and each field from the struct converted to bytes and
+concatenated. If the packet received has that MAC, it is known that it came from the STP and
+then the informations need to be verified. First, the current switch believes he is the root bridge
+and sends packets to other switched to inform about this. When receiving a packet from STP, it
+extracts the BPDU header.
+- If the priority of the root bridge found by the sender is lesser than what the switch had 
+stored, then another switch is the root bridge and the switch needs to inform its neighbours.
+If the current switch thought before it was the root bridge, then it turns all the ports to
+BLOCKING(0) without the one the packet came from because is the connection to the root bridge.
+The path cost is upgraded by adding 10
+- If the priority of the sender's' root bridge is the same as what the current switch had stored,
+it verifies if the port was already LISTENING(1) and the new cost is lesser than what the 
+switch already knew. Else, if the current path is better than the one from the sender, it
+switches the port to listening(the path is through the current switch)
+- If the initial sent packet returns to the current switch, a cycle was found and the port it
+came from becomes BLOCKING
+In the end, if the current switch is still the root bridge, it converts all of its ports to
+LISTENING(final verification to see that all is set)
+
+In the code mentioned before, the only modification made is for the switches to verify if a port 
+is opened for sending packets or not.
